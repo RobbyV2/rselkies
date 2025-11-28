@@ -3214,7 +3214,7 @@ async def _send_stats_periodically_ws(websocket, shared_data, interval_seconds=5
     except Exception as e:
         data_logger.error(f"Stats sender (WS) error: {e}", exc_info=True)
 
-async def on_resize_handler(res_str, current_app_instance, data_server_instance=None, display_id='primary'):
+async def on_resize_handler(res_str, current_app_instance, data_server_instance=None, display_id='primary', ro_data_server_instance=None):
     """
     Handles client resize request. Updates the state for a specific display and triggers a full reconfiguration.
     """
@@ -3358,16 +3358,105 @@ async def main():
         except OSError:
             pass
 
-    global TARGET_FRAMERATE
-    processed_framerate = settings.framerate
-    min_fr, max_fr = processed_framerate
-    if min_fr == max_fr:
-        TARGET_FRAMERATE = min_fr
-    else:
-        fr_def = next((s for s in SETTING_DEFINITIONS if s['name'] == 'framerate'), None)
-        TARGET_FRAMERATE = fr_def['meta']['default_value'] if fr_def else 60
+    # Add command-line argument parser for additional configuration
+    parser = argparse.ArgumentParser(description="Selkies WebSocket Streaming Server")
+    parser.add_argument(
+        "--encoder",
+        default=os.environ.get("SELKIES_ENCODER", "x264enc"),
+        help="Video encoder (e.g., x264enc, jpeg, x264enc-striped)",
+    )
+    parser.add_argument(
+        "--framerate",
+        default=os.environ.get("SELKIES_FRAMERATE", "60"),
+        type=int,
+        help="Target framerate",
+    )
+    parser.add_argument(
+        "--video_bitrate",
+        default=os.environ.get("SELKIES_VIDEO_BITRATE", "16000"),
+        type=int,
+        help="Target video bitrate in kbps",
+    )
+    parser.add_argument(
+        "--dri_node",
+        default=os.environ.get("DRI_NODE", ""),
+        type=str,
+        help="Path to the DRI render node (e.g., /dev/dri/renderD128) for VA-API.",
+    )
+    parser.add_argument(
+        "--audio_device_name",
+        default=os.environ.get("SELKIES_AUDIO_DEVICE", "output.monitor"),
+        help="Audio device name for pcmflux (e.g., a PulseAudio .monitor source). Defaults to output.monitor.",
+    )
+    parser.add_argument(
+        "--h264_crf",
+        default=os.environ.get("SELKIES_H264_CRF", "25"),
+        type=int,
+        help="H.264 CRF for x264enc-striped (0-51)",
+    )
+    parser.add_argument(
+        "--h264_fullcolor",
+        default=os.environ.get("SELKIES_H264_FULLCOLOR", "False").lower() == "true",
+        type=lambda x: (str(x).lower() == 'true'),
+        help="Enable H.264 full color range for x264enc-striped (default: False)",
+    )
+    parser.add_argument(
+        "--h264_streaming_mode",
+        default=os.environ.get("SELKIES_H264_STREAMING_MODE", "False").lower() == "true",
+        type=lambda x: (str(x).lower() == 'true'),
+        help="Enable H.264 streaming mode for pixelflux encoders (default: False).",
+    )
+    parser.add_argument(
+        "--watermark_path",
+        default=os.environ.get("WATERMARK_PNG", ""),
+        type=str,
+        help="Absolute path to the watermark PNG file for pixelflux.",
+    )
+    parser.add_argument(
+        "--watermark_location",
+        default=os.environ.get("WATERMARK_LOCATION", "-1"),
+        type=int,
+        help="Watermark location enum (0-6). Defaults to 4 (Bottom Right) if path is set and this is not specified or invalid.",
+    )
+    parser.add_argument(
+        "--port",
+        default=os.environ.get("CUSTOM_WS_PORT", "8082"),
+        type=int,
+        help="The port for the data websocket server. Overrides the CUSTOM_WS_PORT environment variable.",
+    )
+    parser.add_argument(
+        "--view_only_port",
+        default=os.environ.get("CUSTOM_RO_WS_PORT", "8083"),
+        type=int,
+        help="The port for the view-only data websocket server. Overrides the CUSTOM_RO_WS_PORT environment variable.",
+    )
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    args, unknown = parser.parse_known_args()
 
-    initial_encoder = settings.encoder
+    global TARGET_FRAMERATE, TARGET_VIDEO_BITRATE_KBPS
+
+    # Use command-line arg if provided, otherwise fall back to settings
+    if args.framerate:
+        TARGET_FRAMERATE = args.framerate
+    else:
+        processed_framerate = settings.framerate
+        min_fr, max_fr = processed_framerate
+        if min_fr == max_fr:
+            TARGET_FRAMERATE = min_fr
+        else:
+            fr_def = next((s for s in SETTING_DEFINITIONS if s['name'] == 'framerate'), None)
+            TARGET_FRAMERATE = fr_def['meta']['default_value'] if fr_def else 60
+
+    TARGET_VIDEO_BITRATE_KBPS = args.video_bitrate
+
+    # Use command-line encoder if provided, otherwise use settings
+    if args.encoder:
+        initial_encoder = args.encoder.lower()
+    else:
+        initial_encoder = settings.encoder
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
 
     if not settings.debug[0] and PULSEAUDIO_AVAILABLE:
         logging.getLogger("pulsectl").setLevel(logging.WARNING)
@@ -3405,6 +3494,19 @@ async def main():
         cli_args=settings,
         is_secure_mode=is_secure_mode,
     )
+    ro_data_server = DataStreamingServer(
+        port=args.view_only_port,
+        app=app,
+        uinput_mouse_socket=UINPUT_MOUSE_SOCKET,
+        js_socket_path=JS_SOCKET_PATH,
+        enable_clipboard=False,
+        enable_cursors=ENABLE_CURSORS,
+        cursor_size=CURSOR_SIZE,
+        cursor_scale=1.0,
+        cursor_debug=DEBUG_CURSORS,
+        audio_device_name=args.audio_device_name,
+        cli_args=args,
+    )
     app.data_streaming_server = data_server
 
     input_handler = InputHandler(
@@ -3438,7 +3540,9 @@ async def main():
 
     tasks_to_run = []
     data_server_task = asyncio.create_task(data_server.run_server(), name="DataServer")
+    ro_data_server_task = asyncio.create_task(ro_data_server.run_server(), name="RODataServer")
     tasks_to_run.append(data_server_task)
+    tasks_to_run.append(ro_data_server_task)
 
     control_plane_runner = None
     if is_secure_mode:
