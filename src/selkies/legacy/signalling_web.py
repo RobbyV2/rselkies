@@ -129,6 +129,10 @@ class WebRTCSimpleServer(object):
         # TURN options
         self.turn_shared_secret = options.turn_shared_secret
         self.turn_host = options.turn_host
+
+        # Start-after commands
+        self.start_after_connect = getattr(options, 'start_after_connect', '')
+        self.start_after_disconnect = getattr(options, 'start_after_disconnect', '')
         self.turn_port = options.turn_port
         self.turn_protocol = options.turn_protocol.lower()
         if self.turn_protocol != 'tcp':
@@ -292,13 +296,12 @@ class WebRTCSimpleServer(object):
                     await wso.close()
             # Run application after last session disconnected
             try:
-                if 'SELKIES_START_AFTER_DISCONNECT' in os.environ and len(self.sessions) == 0:
-                    if os.environ['SELKIES_START_AFTER_DISCONNECT'] != '':
-                        command = os.environ['SELKIES_START_AFTER_DISCONNECT'].split(' ')
-                        subprocess.Popen(command, stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.DEVNULL)
+                if self.start_after_disconnect and len(self.sessions) == 0:
+                    command = self.start_after_disconnect.split(' ')
+                    subprocess.Popen(command, stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL)
             except Exception as e:
-                logger.error('Failed to run SELKIES_START_AFTER_DISCONNECT: {}'.format(e))
+                logger.error('Failed to run start_after_disconnect: {}'.format(e))
 
     async def cleanup_room(self, uid, room_id):
         room_peers = self.rooms[room_id]
@@ -391,13 +394,12 @@ class WebRTCSimpleServer(object):
                       ''.format(uid, raddr, callee_id, wsc.remote_address))
                 # Run application on first session connection
                 try:
-                    if 'SELKIES_START_AFTER_CONNECT' in os.environ and len(self.sessions) == 0:
-                        if os.environ['SELKIES_START_AFTER_CONNECT'] != '':
-                            command = os.environ['SELKIES_START_AFTER_CONNECT'].split(' ')
-                            subprocess.Popen(command, stdout=subprocess.DEVNULL,
-                                             stderr=subprocess.DEVNULL)
+                    if self.start_after_connect and len(self.sessions) == 0:
+                        command = self.start_after_connect.split(' ')
+                        subprocess.Popen(command, stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL)
                 except Exception as e:
-                    logger.error('Failed to run SELKIES_START_AFTER_CONNECT: {}'.format(e))
+                    logger.error('Failed to run start_after_connect: {}'.format(e))
                 # Register session
                 self.peers[uid][2] = peer_status = 'session'
                 self.sessions[uid] = callee_id

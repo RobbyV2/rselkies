@@ -561,11 +561,7 @@ async def main():
     using_webrtc_csv = args.enable_webrtc_statistics.lower() == 'true'
     metrics = Metrics(int(args.metrics_http_port), using_webrtc_csv)
 
-    # Setup commands to run on connect and disconnect
-    if args.start_after_connect != '':
-        os.environ['SELKIES_START_AFTER_CONNECT'] = args.start_after_connect
-    if args.start_after_disconnect != '':
-        os.environ['SELKIES_START_AFTER_DISCONNECT'] = args.start_after_disconnect
+    # Setup commands to run on connect and disconnect will be passed through options
 
     # Initialize the signalling client
     using_https = args.enable_https.lower() == 'true'
@@ -895,6 +891,8 @@ async def main():
     options.turn_auth_header_name = args.turn_rest_username_auth_header
     options.stun_host = args.stun_host
     options.stun_port = args.stun_port
+    options.start_after_connect = args.start_after_connect
+    options.start_after_disconnect = args.start_after_disconnect
     server = WebRTCSimpleServer(options)
 
     # Callback method to update TURN servers of a running pipeline.
