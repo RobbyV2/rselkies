@@ -168,10 +168,6 @@ jobs:
           context: addons/turn-rest
           platforms: linux/amd64,linux/arm64
 
-        - name: infra-gcp-installer
-          context: infra/gce/installer-image
-          diff: infra/gce
-
     name: ${{ matrix.name }}${{ matrix.version_suffix }} image build & publish
     steps:
     - uses: actions/checkout@v4
