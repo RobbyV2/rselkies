@@ -4,10 +4,8 @@
 
 # ARM64 Portable Distribution using pip and virtual environment
 ARG PY_BUILD_IMAGE=ghcr.io/robbyv2/rselkies/py-build:main
-ARG WEB_IMAGE=ghcr.io/robbyv2/rselkies/gst-web:main
 
 FROM ${PY_BUILD_IMAGE} AS selkies-build
-FROM ${WEB_IMAGE} AS selkies-web
 
 # Use Ubuntu as base for ARM64 portable build
 FROM ubuntu:22.04
@@ -58,8 +56,8 @@ RUN mkdir -p /opt/selkies-arm/bin \
     /opt/selkies-arm/web \
     /opt/selkies-arm/python
 
-# Copy web files
-COPY --from=selkies-web /opt/gst-web /opt/selkies-arm/web
+# Note: Web files would need to be added separately or downloaded at runtime
+# For ARM builds, we skip the web component as it's built separately
 
 # Copy Python package
 COPY --from=selkies-build /opt/pypi/dist/selkies*.whl /tmp/
