@@ -106,10 +106,6 @@ jobs:
           context: addons/coturn
           platforms: linux/amd64,linux/arm64
 
-        - name: coturn-web
-          context: addons/coturn-web
-          platforms: linux/amd64,linux/arm64
-
         - name: gstreamer
           version_suffix: -ubuntu20.04
           build_args: |
@@ -302,6 +298,11 @@ jobs:
           source: /opt/selkies-conda.tar.gz
           target: selkies-portable-${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_amd64.tar.gz
 
+        - name: conda
+          source: /opt/selkies-conda.tar.gz
+          target: selkies-portable-${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_arm64.tar.gz
+          platforms: linux/arm64
+
         - name: gst-web
           source: /opt/gst-web.tar.gz
           target: selkies-web_${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}.tar.gz
@@ -312,14 +313,32 @@ jobs:
           target: gstreamer-selkies_gpl_${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_ubuntu20.04_amd64.tar.gz
 
         - name: gstreamer
+          version_suffix: -ubuntu20.04
+          source: /opt/selkies-latest.tar.gz
+          target: gstreamer-selkies_gpl_${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_ubuntu20.04_arm64.tar.gz
+          platforms: linux/arm64
+
+        - name: gstreamer
           version_suffix: -ubuntu22.04
           source: /opt/selkies-latest.tar.gz
           target: gstreamer-selkies_gpl_${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_ubuntu22.04_amd64.tar.gz
 
         - name: gstreamer
+          version_suffix: -ubuntu22.04
+          source: /opt/selkies-latest.tar.gz
+          target: gstreamer-selkies_gpl_${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_ubuntu22.04_arm64.tar.gz
+          platforms: linux/arm64
+
+        - name: gstreamer
           version_suffix: -ubuntu24.04
           source: /opt/selkies-latest.tar.gz
           target: gstreamer-selkies_gpl_${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_ubuntu24.04_amd64.tar.gz
+
+        - name: gstreamer
+          version_suffix: -ubuntu24.04
+          source: /opt/selkies-latest.tar.gz
+          target: gstreamer-selkies_gpl_${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_ubuntu24.04_arm64.tar.gz
+          platforms: linux/arm64
 
         - name: js-interposer
           version_suffix: -ubuntu20.04
@@ -401,7 +420,7 @@ jobs:
 
         - name: py-build
           source: /opt/pypi/dist/selkies-${{ needs.get_semver.outputs.semver }}-py3-none-any.whl
-          target: selkies-${{ needs.get_semver.outputs.semver }}-py3-none-any.whl
+          target: selkies_gstreamer-${{ needs.get_semver.outputs.semver }}-py3-none-any.whl
 
     name: ${{ matrix.name }}${{ matrix.version_suffix }}${{ matrix.suffix }}_${{ matrix.platforms || 'linux/amd64' }} release artifact extraction & upload
     steps:
@@ -471,7 +490,25 @@ jobs:
         name: "Release v${{ needs.get_semver.outputs.semver }}"
         tag_name: v${{ needs.get_semver.outputs.semver }}
         append_body: true
-        body: "**By downloading the GStreamer build files or the portable distribution, you acknowledge, agree, and adhere to the terms of works licensed under (L)GPLv2, (L)GPLv3, and https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/LICENSE.txt licenses, as well as other terms of intellectual property, including but not limited to patents.**"
+        body: |
+          ## Release v${{ needs.get_semver.outputs.semver }}
+
+          **By downloading the GStreamer build files or the portable distribution, you acknowledge, agree, and adhere to the terms of works licensed under (L)GPLv2, (L)GPLv3, and https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/LICENSE.txt licenses, as well as other terms of intellectual property, including but not limited to patents.**
+
+          ### What's New
+          - Comprehensive ARM platform support including Raspberry Pi 4/5, NVIDIA Jetson, and Rockchip boards
+          - V4L2 hardware encoders for ARM platforms
+          - NVIDIA Jetson Tegra encoders with NVMM memory support
+          - Improved microphone forwarding with bidirectional audio support
+
+          ### Artifacts
+          - **GStreamer builds**: Pre-built GStreamer with Selkies components for Ubuntu 20.04/22.04/24.04 (AMD64 and ARM64)
+          - **Portable distribution**: Conda-based portable distribution (AMD64 and ARM64)
+          - **Web interface**: HTML5 web client (platform-independent)
+          - **Joystick interposer**: Gamepad support libraries for Ubuntu (AMD64 and ARM64)
+          - **Python wheel**: Platform-independent Python package
+
+          ### Full Changelog
         draft: true
         generate_release_notes: true
         fail_on_unmatched_files: true

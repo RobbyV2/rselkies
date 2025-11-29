@@ -71,10 +71,6 @@ jobs:
           context: addons/coturn
           platforms: linux/amd64,linux/arm64
 
-        - name: coturn-web
-          context: addons/coturn-web
-          platforms: linux/amd64,linux/arm64
-
         - name: gstreamer
           version_suffix: -ubuntu20.04
           build_args: |
