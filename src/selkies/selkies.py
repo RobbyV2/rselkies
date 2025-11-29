@@ -1624,10 +1624,12 @@ class DataStreamingServer:
         # Audio buffer management
         audio_buffer = []
         buffer_max_size = 24000 * 2 * 2  # 2 seconds at 24kHz, 16-bit mono
-        
+
         # Define virtual source details
         virtual_source_name = "SelkiesVirtualMic"
-        master_monitor = "input.monitor"
+        null_sink_name = "SelkiesMicrophoneInput"
+        master_monitor = f"{null_sink_name}.monitor"
+        null_sink_module_index = None
 
         if not self.input_handler:
             logger.error(
@@ -1714,6 +1716,24 @@ class DataStreamingServer:
                                 "Performing PulseAudio virtual microphone setup check..."
                             )
                             try:
+                                # First, ensure the null sink exists
+                                null_sink_exists = False
+                                sink_list = pulse.sink_list()
+                                for sink_obj in sink_list:
+                                    if sink_obj.name == null_sink_name:
+                                        null_sink_exists = True
+                                        data_logger.info(f"Null sink '{null_sink_name}' already exists.")
+                                        break
+
+                                if not null_sink_exists:
+                                    data_logger.info(f"Creating null sink '{null_sink_name}' for microphone input...")
+                                    null_sink_module_index = pulse.module_load(
+                                        "module-null-sink",
+                                        f"sink_name={null_sink_name} sink_properties=device.description='Selkies_Microphone_Input'"
+                                    )
+                                    data_logger.info(f"Created null sink with module index {null_sink_module_index}.")
+
+                                # Now check/create the virtual source
                                 existing_source_info = None
                                 source_list = pulse.source_list()
                                 for source_obj in source_list:
@@ -2539,6 +2559,22 @@ class DataStreamingServer:
                     except Exception as e_unload_final:
                         data_logger.error(
                             f"Error unloading PulseAudio module {_local_pa_module_index} for {raddr}: {e_unload_final}"
+                        )
+
+                # Also clean up the null sink if it was created
+                if (
+                    "null_sink_module_index" in locals()
+                    and locals()["null_sink_module_index"] is not None
+                ):
+                    _local_null_sink_module_index = locals()["null_sink_module_index"]
+                    try:
+                        data_logger.info(
+                            f"Unloading PulseAudio null sink module {_local_null_sink_module_index} (client: {raddr})."
+                        )
+                        _local_pulse.module_unload(_local_null_sink_module_index)
+                    except Exception as e_unload_null:
+                        data_logger.error(
+                            f"Error unloading null sink module {_local_null_sink_module_index} for {raddr}: {e_unload_null}"
                         )
                 try:
                     _local_pulse.close()
