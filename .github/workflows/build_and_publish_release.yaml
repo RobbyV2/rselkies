@@ -45,11 +45,13 @@ jobs:
         include:
         - name: gst-web
           context: addons/gst-web
+          platforms: linux/amd64,linux/arm64
 
         - name: py-build
           build_args: |
             PACKAGE_VERSION=${{ needs.get_semver.outputs.semver }}
           context: .
+          platforms: linux/amd64,linux/arm64
 
     name: ${{ matrix.name }}${{ matrix.version_suffix }} image build & publish
     steps:
