@@ -5,11 +5,9 @@
 # ARM64 Portable Distribution using pip and virtual environment
 ARG PY_BUILD_IMAGE=ghcr.io/robbyv2/rselkies/py-build:main
 ARG WEB_IMAGE=ghcr.io/robbyv2/rselkies/gst-web:main
-ARG GSTREAMER_IMAGE=ghcr.io/robbyv2/rselkies/gstreamer:main-ubuntu22.04
 
 FROM ${PY_BUILD_IMAGE} AS selkies-build
 FROM ${WEB_IMAGE} AS selkies-web
-FROM ${GSTREAMER_IMAGE} AS selkies-gstreamer
 
 # Use Ubuntu as base for ARM64 portable build
 FROM ubuntu:22.04
@@ -19,7 +17,7 @@ ARG PACKAGE_VERSION=0.0.0.dev0
 
 SHELL ["/bin/bash", "-c"]
 
-# Install Python and system dependencies
+# Install Python, GStreamer and system dependencies
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3.10-venv \
@@ -35,6 +33,16 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-dev \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav \
+    gstreamer1.0-gl \
+    gstreamer1.0-gtk3 \
+    gstreamer1.0-pulseaudio \
+    gstreamer1.0-x \
     gcc \
     g++ \
     pkg-config \
@@ -47,12 +55,8 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p /opt/selkies-arm/bin \
     /opt/selkies-arm/lib \
     /opt/selkies-arm/share \
-    /opt/selkies-arm/gstreamer \
     /opt/selkies-arm/web \
     /opt/selkies-arm/python
-
-# Copy GStreamer files from gstreamer image
-COPY --from=selkies-gstreamer /opt/gstreamer /opt/selkies-arm/gstreamer
 
 # Copy web files
 COPY --from=selkies-web /opt/gst-web /opt/selkies-arm/web
@@ -85,10 +89,6 @@ RUN cat > /opt/selkies-arm/bin/activate.sh << 'EOF'
 #!/bin/bash
 export SELKIES_ROOT="/opt/selkies-arm"
 export PATH="${SELKIES_ROOT}/bin:${PATH}"
-export LD_LIBRARY_PATH="${SELKIES_ROOT}/gstreamer/lib/aarch64-linux-gnu:${LD_LIBRARY_PATH}"
-export GST_PLUGIN_PATH="${SELKIES_ROOT}/gstreamer/lib/aarch64-linux-gnu/gstreamer-1.0"
-export GI_TYPELIB_PATH="${SELKIES_ROOT}/gstreamer/lib/aarch64-linux-gnu/girepository-1.0"
-export PYTHONPATH="${SELKIES_ROOT}/gstreamer/lib/python3/dist-packages:${PYTHONPATH}"
 export SELKIES_WEB_ROOT="${SELKIES_ROOT}/web"
 source "${SELKIES_ROOT}/python/venv/bin/activate"
 echo "Selkies ARM portable environment activated"
