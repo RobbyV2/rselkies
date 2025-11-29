@@ -101,6 +101,16 @@ jobs:
             PY_BUILD_IMAGE=ghcr.io/REPO_PLACEHOLDER/py-build:${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}
             WEB_IMAGE=ghcr.io/REPO_PLACEHOLDER/gst-web:${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}
           context: addons/conda
+          platforms: linux/amd64
+
+        - name: conda-arm
+          build_args: |
+            PACKAGE_VERSION=${{ needs.get_semver.outputs.semver }}
+            PY_BUILD_IMAGE=ghcr.io/REPO_PLACEHOLDER/py-build:${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}
+            WEB_IMAGE=ghcr.io/REPO_PLACEHOLDER/gst-web:${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}
+            GSTREAMER_IMAGE=ghcr.io/REPO_PLACEHOLDER/gstreamer:${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}-ubuntu22.04
+          context: addons/conda-arm
+          platforms: linux/arm64
 
         - name: coturn
           context: addons/coturn
@@ -297,6 +307,11 @@ jobs:
         - name: conda
           source: /opt/selkies-conda.tar.gz
           target: selkies-portable-${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_amd64.tar.gz
+
+        - name: conda-arm
+          source: /opt/selkies-portable-arm.tar.gz
+          target: selkies-portable-${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_arm64.tar.gz
+          platforms: linux/arm64
 
         - name: gst-web
           source: /opt/gst-web.tar.gz
