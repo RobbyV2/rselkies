@@ -30,6 +30,6 @@ WORKDIR /opt
 RUN . /opt/conda/bin/activate && \
     conda install -c conda-forge -y conda-build conda-pack && \
     SELKIES_VERSION="${PKG_VERSION}" conda-build -c conda-forge -c nvidia "${SELKIES_BUILD}" && \
-    conda create -n selkies -y --use-local -c conda-forge -c nvidia selkies && \
+    conda create -n selkies -y --use-local -c conda-forge -c nvidia selkies-gstreamer && \
     conda-pack -f -n selkies --arcroot selkies -o /opt/selkies-conda.tar.gz --format tar.gz --compress-level 7 -j -1 && \
     conda-build purge-all && conda clean --all -f -y
