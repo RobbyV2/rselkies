@@ -146,7 +146,7 @@ jobs:
 
     - name: Convert repository name to lowercase
       id: repo
-      run: echo "repository=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')\" >> $GITHUB_OUTPUT
+      run: echo "repository=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
     - name: Prepare build args
       id: build_args
@@ -252,25 +252,58 @@ jobs:
         - name: conda
           source: /opt/selkies-conda.tar.gz
           target: selkies-portable.tar.gz
+          platforms: linux/amd64
+
+        - name: conda
+          source: /opt/selkies-conda.tar.gz
+          target: selkies-portable.tar.gz
+          platforms: linux/arm64
 
         - name: gst-web
           source: /opt/gst-web.tar.gz
           target: gst-web.tar.gz
+          platforms: linux/amd64
+
+        - name: gst-web
+          source: /opt/gst-web.tar.gz
+          target: gst-web.tar.gz
+          platforms: linux/arm64
 
         - name: gstreamer
           version_suffix: -ubuntu20.04
           source: /opt/selkies-latest.tar.gz
           target: selkies.tar.gz
+          platforms: linux/amd64
+
+        - name: gstreamer
+          version_suffix: -ubuntu20.04
+          source: /opt/selkies-latest.tar.gz
+          target: selkies.tar.gz
+          platforms: linux/arm64
 
         - name: gstreamer
           version_suffix: -ubuntu22.04
           source: /opt/selkies-latest.tar.gz
           target: selkies.tar.gz
+          platforms: linux/amd64
+
+        - name: gstreamer
+          version_suffix: -ubuntu22.04
+          source: /opt/selkies-latest.tar.gz
+          target: selkies.tar.gz
+          platforms: linux/arm64
 
         - name: gstreamer
           version_suffix: -ubuntu24.04
           source: /opt/selkies-latest.tar.gz
           target: selkies.tar.gz
+          platforms: linux/amd64
+
+        - name: gstreamer
+          version_suffix: -ubuntu24.04
+          source: /opt/selkies-latest.tar.gz
+          target: selkies.tar.gz
+          platforms: linux/arm64
 
         - name: js-interposer
           version_suffix: -ubuntu20.04
@@ -362,6 +395,10 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+    - name: Convert repository name to lowercase
+      id: repo
+      run: echo "repository=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
     - name: Log into registry ghcr.io
       uses: docker/login-action@v3
       with:
@@ -371,7 +408,7 @@ jobs:
 
     - name: ${{ matrix.name }}${{ matrix.version_suffix }}${{ matrix.suffix }}_${{ matrix.platforms || 'linux/amd64' }} build artifact extraction
       run: |
-        docker container create --name=copy --platform="${{ matrix.platforms || 'linux/amd64' }}" "ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}${{ matrix.version_suffix }}"
+        docker container create --name=copy --platform="${{ matrix.platforms || 'linux/amd64' }}" "ghcr.io/${{ steps.repo.outputs.repository }}/${{ matrix.name }}:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}${{ matrix.version_suffix }}"
         docker container cp "copy:${{ matrix.source }}" "${{ env.TMPDIR }}/${{ matrix.target }}"
         docker container rm --force --volumes copy
         echo "release_arch=$(echo ${{ matrix.platforms || 'linux/amd64' }} | sed -e 's/\//\-/')" >> "$GITHUB_ENV"
