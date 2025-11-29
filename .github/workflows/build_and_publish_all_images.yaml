@@ -65,7 +65,6 @@ jobs:
             PACKAGE_VERSION=0.0.0.dev0
             PKG_VERSION=0.0.0
           context: addons/conda
-          platforms: linux/amd64,linux/arm64
 
         - name: coturn
           context: addons/coturn
@@ -244,12 +243,6 @@ jobs:
         - name: conda
           source: /opt/selkies-conda.tar.gz
           target: selkies-portable.tar.gz
-          platforms: linux/amd64
-
-        - name: conda
-          source: /opt/selkies-conda.tar.gz
-          target: selkies-portable.tar.gz
-          platforms: linux/arm64
 
         - name: gst-web
           source: /opt/gst-web.tar.gz

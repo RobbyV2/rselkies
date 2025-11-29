@@ -298,11 +298,6 @@ jobs:
           source: /opt/selkies-conda.tar.gz
           target: selkies-portable-${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_amd64.tar.gz
 
-        - name: conda
-          source: /opt/selkies-conda.tar.gz
-          target: selkies-portable-${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}_arm64.tar.gz
-          platforms: linux/arm64
-
         - name: gst-web
           source: /opt/gst-web.tar.gz
           target: selkies-web_${{ github.event_name != 'pull_request' && github.event.inputs.tag || 'main' }}.tar.gz
