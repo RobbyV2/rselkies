@@ -97,6 +97,7 @@ from .input_handler import WebRTCInput as InputHandler, SelkiesGamepad, GamepadM
 import psutil
 import GPUtil
 
+
 upload_path = os.getenv('FILE_MANAGER_PATH', '~/Desktop')
 upload_dir_path = os.path.expanduser(upload_path)
 
@@ -3525,6 +3526,7 @@ async def main():
         initial_encoder = args.encoder.lower()
     else:
         initial_encoder = settings.encoder
+
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)

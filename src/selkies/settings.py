@@ -43,7 +43,15 @@ SETTING_DEFINITIONS = [
     {'name': 'file_transfers', 'type': 'list', 'default': 'upload,download', 'meta': {'allowed': ['upload', 'download']}, 'help': 'Allowed file transfer directions (comma-separated: "upload,download"). Set to "" or "none" to disable.'},
 
     # Video & Encoder Settings
-    {'name': 'encoder', 'type': 'enum', 'default': 'x264enc', 'meta': {'allowed': ['x264enc', 'x264enc-striped', 'jpeg']}, 'help': 'The default video encoder.'},
+    {'name': 'encoder', 'type': 'enum', 'default': 'x264enc', 'meta': {
+        'allowed': [
+            'x264enc', 'x264enc-striped', 'jpeg',
+            # V4L2 hardware encoders (Raspberry Pi, generic ARM)
+            'v4l2h264enc', 'v4l2h265enc', 'v4l2vp8enc', 'v4l2vp9enc',
+            # NVIDIA Jetson hardware encoders
+            'nvv4l2h264enc', 'nvv4l2h265enc', 'nvv4l2vp8enc', 'nvv4l2vp9enc'
+        ]
+    }, 'help': 'The default video encoder.'},
     {'name': 'framerate', 'type': 'range', 'default': '8-120', 'meta': {'default_value': 60}, 'help': 'Allowed framerate range (e.g., "8-165") or a fixed value (e.g., "60").'},
     {'name': 'h264_crf', 'type': 'range', 'default': '5-50', 'meta': {'default_value': 25}, 'help': 'Allowed H.264 CRF range (e.g., "5-50") or a fixed value.'},
     {'name': 'jpeg_quality', 'type': 'range', 'default': '1-100', 'meta': {'default_value': 40}, 'help': 'Allowed JPEG quality range (e.g., "1-100") or a fixed value.'},

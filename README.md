@@ -14,4 +14,6 @@ Selkies is designed for researchers studying Agentic AI, Graphical AI, Robotics,
 
 While designed for clustered or unprivileged containerized environments, Selkies can also be deployed in desktop computers, and any performance issue that would be problematic in cloud gaming platforms is also considered a bug.
 
+**NEW: Full ARM Platform Support!** Selkies now includes comprehensive hardware-accelerated encoding for ARM devices including Raspberry Pi 4/5, NVIDIA Jetson (Nano to Orin), and Rockchip boards. Specify the appropriate encoder for your platform: `v4l2h264enc` for Raspberry Pi, `nvv4l2h264enc` for Jetson.
+
 **[Read the Documentation](https://selkies-project.github.io/selkies/) to get started.**

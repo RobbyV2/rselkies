@@ -606,6 +606,169 @@ class GSTWebRTCApp:
             vaav1enc.set_property("target-usage", 6)
             vaav1enc.set_property("bitrate", self.fec_video_bitrate)
 
+        # ADD_ENCODER: V4L2 hardware encoders for ARM platforms (Raspberry Pi, Rockchip, etc.)
+        elif self.encoder in ["v4l2h264enc", "v4l2h265enc", "v4l2vp8enc", "v4l2vp9enc"]:
+            # Videoconvert for colorspace conversion to V4L2 compatible format
+            videoconvert = Gst.ElementFactory.make("videoconvert")
+            videoconvert.set_property("n-threads", min(4, max(1, len(os.sched_getaffinity(0)) - 1)))
+            videoconvert.set_property("qos", True)
+
+            # V4L2 encoders typically work best with I420 or NV12 format
+            videoconvert_caps = Gst.caps_from_string("video/x-raw")
+            # Try NV12 first for better performance, fallback to I420
+            videoconvert_caps.set_value("format", "NV12")
+            videoconvert_capsfilter = Gst.ElementFactory.make("capsfilter")
+            videoconvert_capsfilter.set_property("caps", videoconvert_caps)
+
+            if self.encoder == "v4l2h264enc":
+                # Create V4L2 H.264 encoder
+                v4l2h264enc = Gst.ElementFactory.make("v4l2h264enc", "v4l2enc")
+
+                # Configure for low latency streaming
+                # Most V4L2 devices support these controls via V4L2 API
+                if v4l2h264enc:
+                    # Set bitrate in bits per second
+                    v4l2h264enc.set_property("bitrate", self.fec_video_bitrate * 1000)
+
+                    # Try to set various V4L2 controls if available
+                    try:
+                        # Raspberry Pi specific optimizations
+                        v4l2h264enc.set_property("extra-controls",
+                            "controls,h264_profile=baseline,h264_level=4.0,"
+                            "h264_i_frame_period=%d,h264_minimum_qp_value=10,"
+                            "h264_maximum_qp_value=40,repeat_sequence_header=1,"
+                            "video_bitrate_mode=1" %
+                            (self.keyframe_frame_distance if self.keyframe_distance != -1.0 else 60))
+                    except:
+                        # Fallback for other V4L2 devices
+                        logger.info("Using default V4L2 H.264 encoder settings")
+
+                    # Ensure output is byte-stream format for RTP
+                    v4l2h264enc_caps = Gst.caps_from_string("video/x-h264")
+                    v4l2h264enc_caps.set_value("stream-format", "byte-stream")
+                    v4l2h264enc_caps.set_value("alignment", "au")
+                    v4l2h264enc_capsfilter = Gst.ElementFactory.make("capsfilter")
+                    v4l2h264enc_capsfilter.set_property("caps", v4l2h264enc_caps)
+
+            elif self.encoder == "v4l2h265enc":
+                # Create V4L2 H.265/HEVC encoder
+                v4l2h265enc = Gst.ElementFactory.make("v4l2h265enc", "v4l2enc")
+
+                if v4l2h265enc:
+                    v4l2h265enc.set_property("bitrate", self.fec_video_bitrate * 1000)
+
+                    try:
+                        v4l2h265enc.set_property("extra-controls",
+                            "controls,hevc_profile=main,hevc_level=4.1,"
+                            "hevc_i_frame_period=%d,hevc_minimum_qp_value=10,"
+                            "hevc_maximum_qp_value=40,repeat_sequence_header=1" %
+                            (self.keyframe_frame_distance if self.keyframe_distance != -1.0 else 60))
+                    except:
+                        logger.info("Using default V4L2 H.265 encoder settings")
+
+            elif self.encoder == "v4l2vp8enc":
+                # Create V4L2 VP8 encoder
+                v4l2vp8enc = Gst.ElementFactory.make("v4l2vp8enc", "v4l2enc")
+
+                if v4l2vp8enc:
+                    v4l2vp8enc.set_property("bitrate", self.fec_video_bitrate * 1000)
+
+                    try:
+                        v4l2vp8enc.set_property("extra-controls",
+                            "controls,vp8_profile=0")
+                    except:
+                        logger.info("Using default V4L2 VP8 encoder settings")
+
+            elif self.encoder == "v4l2vp9enc":
+                # Create V4L2 VP9 encoder
+                v4l2vp9enc = Gst.ElementFactory.make("v4l2vp9enc", "v4l2enc")
+
+                if v4l2vp9enc:
+                    v4l2vp9enc.set_property("bitrate", self.fec_video_bitrate * 1000)
+
+                    try:
+                        v4l2vp9enc.set_property("extra-controls",
+                            "controls,vp9_profile=0")
+                    except:
+                        logger.info("Using default V4L2 VP9 encoder settings")
+
+        # ADD_ENCODER: NVIDIA Jetson hardware encoders
+        elif self.encoder in ["nvv4l2h264enc", "nvv4l2h265enc", "nvv4l2vp8enc", "nvv4l2vp9enc"]:
+            # Use NVMM memory for better performance on Jetson
+            nvvidconv = Gst.ElementFactory.make("nvvidconv")
+            if nvvidconv:
+                nvvidconv.set_property("flip-method", 0)  # No flip
+
+            # Convert to NVMM memory format
+            nvvidconv_caps = Gst.caps_from_string("video/x-raw(memory:NVMM)")
+            nvvidconv_caps.set_value("format", "NV12")
+            nvvidconv_capsfilter = Gst.ElementFactory.make("capsfilter")
+            nvvidconv_capsfilter.set_property("caps", nvvidconv_caps)
+
+            if self.encoder == "nvv4l2h264enc":
+                # NVIDIA Jetson H.264 encoder
+                nvv4l2h264enc = Gst.ElementFactory.make("nvv4l2h264enc", "nvv4l2enc")
+
+                if nvv4l2h264enc:
+                    # Set bitrate (in bits per second)
+                    nvv4l2h264enc.set_property("bitrate", self.fec_video_bitrate * 1000)
+                    # Rate control mode: 0=VBR, 1=CBR
+                    nvv4l2h264enc.set_property("control-rate", 1)  # CBR for streaming
+                    # Preset: 0=DisablePreset, 1=UltraFast, 2=Fast, 3=Medium, 4=Slow
+                    nvv4l2h264enc.set_property("preset-level", 1)  # UltraFast for low latency
+                    # Profile: 0=Baseline, 2=Main, 4=High
+                    nvv4l2h264enc.set_property("profile", 0)  # Baseline for compatibility
+                    # Insert SPS/PPS at IDR
+                    nvv4l2h264enc.set_property("insert-sps-pps", True)
+                    # IDR interval (0 = infinite)
+                    nvv4l2h264enc.set_property("iframeinterval",
+                        0 if self.keyframe_distance == -1.0 else self.keyframe_frame_distance)
+                    # Disable B-frames for low latency
+                    nvv4l2h264enc.set_property("num-B-Frames", 0)
+                    # Enable AUD insertion
+                    nvv4l2h264enc.set_property("insert-aud", False)
+                    # Quality preset for CBR
+                    nvv4l2h264enc.set_property("EnableTwopassCBR", True)
+                    # Maximum performance
+                    nvv4l2h264enc.set_property("maxperf-enable", True)
+
+            elif self.encoder == "nvv4l2h265enc":
+                # NVIDIA Jetson H.265/HEVC encoder
+                nvv4l2h265enc = Gst.ElementFactory.make("nvv4l2h265enc", "nvv4l2enc")
+
+                if nvv4l2h265enc:
+                    nvv4l2h265enc.set_property("bitrate", self.fec_video_bitrate * 1000)
+                    nvv4l2h265enc.set_property("control-rate", 1)  # CBR
+                    nvv4l2h265enc.set_property("preset-level", 1)  # UltraFast
+                    nvv4l2h265enc.set_property("profile", 0)  # Main profile
+                    nvv4l2h265enc.set_property("insert-sps-pps", True)
+                    nvv4l2h265enc.set_property("iframeinterval",
+                        0 if self.keyframe_distance == -1.0 else self.keyframe_frame_distance)
+                    nvv4l2h265enc.set_property("num-B-Frames", 0)
+                    nvv4l2h265enc.set_property("insert-aud", False)
+                    nvv4l2h265enc.set_property("EnableTwopassCBR", True)
+                    nvv4l2h265enc.set_property("maxperf-enable", True)
+
+            elif self.encoder == "nvv4l2vp8enc":
+                # NVIDIA Jetson VP8 encoder
+                nvv4l2vp8enc = Gst.ElementFactory.make("nvv4l2vp8enc", "nvv4l2enc")
+
+                if nvv4l2vp8enc:
+                    nvv4l2vp8enc.set_property("bitrate", self.fec_video_bitrate * 1000)
+                    nvv4l2vp8enc.set_property("control-rate", 1)  # CBR
+                    nvv4l2vp8enc.set_property("preset-level", 1)  # UltraFast
+                    nvv4l2vp8enc.set_property("maxperf-enable", True)
+
+            elif self.encoder == "nvv4l2vp9enc":
+                # NVIDIA Jetson VP9 encoder
+                nvv4l2vp9enc = Gst.ElementFactory.make("nvv4l2vp9enc", "nvv4l2enc")
+
+                if nvv4l2vp9enc:
+                    nvv4l2vp9enc.set_property("bitrate", self.fec_video_bitrate * 1000)
+                    nvv4l2vp9enc.set_property("control-rate", 1)  # CBR
+                    nvv4l2vp9enc.set_property("preset-level", 1)  # UltraFast
+                    nvv4l2vp9enc.set_property("maxperf-enable", True)
+
         elif self.encoder in ["x264enc"]:
             # Videoconvert for colorspace conversion
             videoconvert = Gst.ElementFactory.make("videoconvert")
@@ -961,6 +1124,32 @@ class GSTWebRTCApp:
 
         elif self.encoder in ["vaav1enc"]:
             pipeline_elements += [vapostproc, vapostproc_capsfilter, vaav1enc, av1enc_capsfilter, rtpav1pay, rtpav1pay_capsfilter]
+
+        # ADD_ENCODER: V4L2 hardware encoders pipeline elements
+        elif self.encoder in ["v4l2h264enc"]:
+            pipeline_elements += [videoconvert, videoconvert_capsfilter, v4l2h264enc, v4l2h264enc_capsfilter, rtph264pay, rtph264pay_capsfilter]
+
+        elif self.encoder in ["v4l2h265enc"]:
+            pipeline_elements += [videoconvert, videoconvert_capsfilter, v4l2h265enc, h265enc_capsfilter, rtph265pay, rtph265pay_capsfilter]
+
+        elif self.encoder in ["v4l2vp8enc"]:
+            pipeline_elements += [videoconvert, videoconvert_capsfilter, v4l2vp8enc, vpenc_capsfilter, rtpvppay, rtpvppay_capsfilter]
+
+        elif self.encoder in ["v4l2vp9enc"]:
+            pipeline_elements += [videoconvert, videoconvert_capsfilter, v4l2vp9enc, vpenc_capsfilter, rtpvppay, rtpvppay_capsfilter]
+
+        # ADD_ENCODER: NVIDIA Jetson hardware encoders pipeline elements
+        elif self.encoder in ["nvv4l2h264enc"]:
+            pipeline_elements += [nvvidconv, nvvidconv_capsfilter, nvv4l2h264enc, h264enc_capsfilter, rtph264pay, rtph264pay_capsfilter]
+
+        elif self.encoder in ["nvv4l2h265enc"]:
+            pipeline_elements += [nvvidconv, nvvidconv_capsfilter, nvv4l2h265enc, h265enc_capsfilter, rtph265pay, rtph265pay_capsfilter]
+
+        elif self.encoder in ["nvv4l2vp8enc"]:
+            pipeline_elements += [nvvidconv, nvvidconv_capsfilter, nvv4l2vp8enc, vpenc_capsfilter, rtpvppay, rtpvppay_capsfilter]
+
+        elif self.encoder in ["nvv4l2vp9enc"]:
+            pipeline_elements += [nvvidconv, nvvidconv_capsfilter, nvv4l2vp9enc, vpenc_capsfilter, rtpvppay, rtpvppay_capsfilter]
 
         elif self.encoder in ["x264enc"]:
             pipeline_elements += [videoconvert, videoconvert_capsfilter, x264enc, h264enc_capsfilter, rtph264pay, rtph264pay_capsfilter]

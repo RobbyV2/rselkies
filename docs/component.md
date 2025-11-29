@@ -332,6 +332,15 @@ This table specifies the currently implemented video encoders and their correspo
 | [`svtav1enc`](https://gstreamer.freedesktop.org/documentation/svtav1/svtav1enc.html) | AV1 | Software | All | Chromium-based, Safari | `svt-av1` ≥ 1.1, [`gst-plugins-rs`](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs) | NOT WORKING, Conda or Ubuntu ≥ 24.04 |
 | [`av1enc`](https://gstreamer.freedesktop.org/documentation/aom/av1enc.html) | AV1 | Software | All | Chromium-based, Safari | `aom`, [`gst-plugins-rs`](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs) | Unstable, Conda or Ubuntu ≥ 22.04 |
 | [`rav1enc`](https://gstreamer.freedesktop.org/documentation/rav1e/index.html) | AV1 | Software | All | Chromium-based, Safari | [`gst-plugins-rs`](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs) | Unstable |
+| **ARM Platform Encoders** | | | | | | |
+| `v4l2h264enc` | H.264 AVC | V4L2 M2M Hardware | ARM Linux | All Major | V4L2, kernel driver, gst-plugins-good | **Recommended for Raspberry Pi 4/5**, requires hardware support |
+| `v4l2h265enc` | H.265 HEVC | V4L2 M2M Hardware | ARM Linux | Safari ≥ 17.9 | V4L2, kernel driver, gst-plugins-good | Raspberry Pi 5 only, requires hardware support |
+| `v4l2vp8enc` | VP8 | V4L2 M2M Hardware | ARM Linux | All Major | V4L2, kernel driver, gst-plugins-good | Rockchip RK3399+, requires hardware support |
+| `v4l2vp9enc` | VP9 | V4L2 M2M Hardware | ARM Linux | All Major | V4L2, kernel driver, gst-plugins-good | Rockchip RK3588, requires hardware support |
+| [`nvv4l2h264enc`](https://docs.nvidia.com/jetson/l4t-multimedia/group__V4L2Enc.html) | H.264 AVC | NVIDIA Tegra | Jetson Linux | All Major | JetPack SDK | **Recommended for Jetson**, all models |
+| [`nvv4l2h265enc`](https://docs.nvidia.com/jetson/l4t-multimedia/group__V4L2Enc.html) | H.265 HEVC | NVIDIA Tegra | Jetson Linux | Safari ≥ 17.9 | JetPack SDK | Jetson Nano and newer |
+| [`nvv4l2vp8enc`](https://docs.nvidia.com/jetson/l4t-multimedia/group__V4L2Enc.html) | VP8 | NVIDIA Tegra | Jetson Linux | All Major | JetPack SDK | Limited models |
+| [`nvv4l2vp9enc`](https://docs.nvidia.com/jetson/l4t-multimedia/group__V4L2Enc.html) | VP9 | NVIDIA Tegra | Jetson Linux | All Major | JetPack SDK | Xavier and Orin only |
 
 ### Video Color Converters
 
@@ -341,7 +350,77 @@ This table specifies the currently implemented video frame converters used to co
 |---|---|---|---|---|---|
 | [`cudaconvert`](https://gstreamer.freedesktop.org/documentation/nvcodec/cudaconvert.html) | `nvh264enc`, `nvh265enc`, `nvav1enc` | NVIDIA GPU | All | NVRTC | N/A |
 | [`vapostproc`](https://gstreamer.freedesktop.org/documentation/va/vapostproc.html) | `vah264enc`, `vah265enc`, `vavp9enc`, `vaav1enc` | AMD, Intel GPU | All | VA-API Driver, `libva` | N/A |
-| [`videoconvert`](https://gstreamer.freedesktop.org/documentation/videoconvertscale/videoconvert.html) | `x264enc`, `openh264enc`, `x265enc`, `vp8enc`, `vp9enc`, `svtav1enc`, `av1enc`, `rav1enc` | Software | All | N/A | N/A |
+| [`nvvidconv`](https://docs.nvidia.com/jetson/l4t-multimedia/group__V4L2Conv.html) | `nvv4l2h264enc`, `nvv4l2h265enc`, `nvv4l2vp8enc`, `nvv4l2vp9enc` | NVIDIA Tegra | Jetson Linux | JetPack SDK | Uses NVMM memory for zero-copy |
+| [`videoconvert`](https://gstreamer.freedesktop.org/documentation/videoconvertscale/videoconvert.html) | `x264enc`, `openh264enc`, `x265enc`, `vp8enc`, `vp9enc`, `svtav1enc`, `av1enc`, `rav1enc`, `v4l2h264enc`, `v4l2h265enc`, `v4l2vp8enc`, `v4l2vp9enc` | Software | All | N/A | N/A |
+
+### ARM Platform Support
+
+Selkies-GStreamer includes comprehensive support for ARM platforms including Raspberry Pi, NVIDIA Jetson, Rockchip, and other ARM SoCs with hardware-accelerated encoding.
+
+#### Supported ARM Platforms
+
+| Platform | Models | Recommended Encoder | Max Resolution | Notes |
+|---|---|---|---|---|
+| Raspberry Pi | Pi 4, 400 | `v4l2h264enc` | 1920x1080 @ 60fps | Requires 64-bit OS |
+| Raspberry Pi | Pi 5 | `v4l2h264enc`, `v4l2h265enc` | 3840x2160 @ 30fps | H.265 support available |
+| NVIDIA Jetson | Nano | `nvv4l2h264enc` | 1920x1080 @ 60fps | JetPack 4.6+ required |
+| NVIDIA Jetson | TX2, NX | `nvv4l2h264enc`, `nvv4l2h265enc` | 3840x2160 @ 30fps | Full codec support |
+| NVIDIA Jetson | Xavier, Orin | `nvv4l2h264enc`, `nvv4l2h265enc`, `nvv4l2vp9enc` | 7680x4320 @ 30fps | VP9 encoding available |
+| Rockchip | RK3399 | `v4l2h264enc`, `v4l2vp8enc` | 3840x2160 @ 30fps | Requires MPP library |
+| Rockchip | RK3588 | `v4l2h264enc`, `v4l2h265enc`, `v4l2vp9enc` | 7680x4320 @ 30fps | Full hardware acceleration |
+| Generic ARM | Various | `x264enc` (software) | Depends on CPU | Fallback option |
+
+#### ARM-Specific Configuration
+
+To use ARM hardware encoders, specify the appropriate encoder for your platform:
+
+```bash
+# Raspberry Pi
+selkies-gstreamer --encoder=v4l2h264enc
+
+# NVIDIA Jetson
+selkies-gstreamer --encoder=nvv4l2h264enc
+
+# Rockchip with VP9 support
+selkies-gstreamer --encoder=v4l2vp9enc
+```
+
+#### Performance Tips for ARM
+
+- **Raspberry Pi**: Enable GPU memory split of at least 128MB in `/boot/config.txt`
+- **Jetson**: Use `jetson_clocks` to maximize performance
+- **All ARM**: Prefer H.264 over H.265/VP9 for better compatibility and lower latency
+- **Network**: Use wired ethernet when possible for best streaming quality
+
+#### ARM Troubleshooting
+
+**Common Issues and Solutions:**
+
+1. **Encoder not found**:
+   - Ensure GStreamer plugins are installed: `sudo apt-get install gstreamer1.0-plugins-good gstreamer1.0-plugins-bad`
+   - For Raspberry Pi: `sudo apt-get install gstreamer1.0-v4l2`
+   - Check available encoders: `gst-inspect-1.0 | grep enc`
+
+2. **Raspberry Pi V4L2 errors**:
+   - Enable camera interface: `sudo raspi-config` → Interface Options → Camera
+   - Add to `/boot/config.txt`: `gpu_mem=128` and `start_x=1`
+   - Ensure 64-bit OS for Pi 4/5
+
+3. **Jetson encoder issues**:
+   - Install multimedia API: `sudo apt-get install nvidia-l4t-multimedia`
+   - Check JetPack version: `cat /etc/nv_tegra_release`
+   - Run performance mode: `sudo jetson_clocks`
+
+4. **Poor performance**:
+   - Use `auto` encoder for automatic hardware selection
+   - Lower resolution or framerate if needed
+   - Check CPU throttling: `vcgencmd get_throttled` (Raspberry Pi)
+   - Monitor temperature: `vcgencmd measure_temp` (Raspberry Pi) or `tegrastats` (Jetson)
+
+5. **No hardware acceleration**:
+   - Verify kernel modules: `lsmod | grep v4l2`
+   - Check device nodes: `ls -la /dev/video*`
+   - For Rockchip: Install MPP library and gstreamer1.0-rockchip
 
 ### Display Capture Interfaces
 

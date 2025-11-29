@@ -244,6 +244,75 @@ Please read [**WebRTC and Firewall Issues**](firewall.md).
 
 **8. Read [**Troubleshooting and FAQs**](faq.md) if something is not as intended and [**Usage**](usage.md) for more information on customizing.**
 
+### ARM Platform Installation
+
+For ARM platforms including Raspberry Pi, NVIDIA Jetson, and Rockchip boards, follow these additional steps:
+
+#### Raspberry Pi 4/5
+
+**1. Enable hardware acceleration:**
+```bash
+# Add to /boot/config.txt (Raspberry Pi OS) or /boot/firmware/config.txt (Ubuntu)
+gpu_mem=128
+start_x=1
+
+# For Raspberry Pi 5, also add:
+dtoverlay=vc4-kms-v3d-pi5
+```
+
+**2. Install V4L2 GStreamer plugins:**
+```bash
+sudo apt-get install gstreamer1.0-v4l2 gstreamer1.0-plugins-good
+```
+
+**3. Use the V4L2 encoder:**
+```bash
+selkies-gstreamer --encoder=v4l2h264enc  # H.264 on Pi 4/5
+selkies-gstreamer --encoder=v4l2h265enc  # H.265 on Pi 5 only
+```
+
+#### NVIDIA Jetson
+
+**1. Install JetPack SDK (includes NVMM and hardware encoders):**
+Follow NVIDIA's official JetPack installation guide for your Jetson model.
+
+**2. Enable maximum performance:**
+```bash
+sudo jetson_clocks
+sudo nvpmodel -m 0  # Max performance mode
+```
+
+**3. Use the NVIDIA Tegra encoder:**
+```bash
+selkies-gstreamer --encoder=nvv4l2h264enc  # H.264
+selkies-gstreamer --encoder=nvv4l2h265enc  # H.265 (Nano and newer)
+selkies-gstreamer --encoder=nvv4l2vp9enc   # VP9 (Xavier/Orin only)
+```
+
+#### Rockchip Boards
+
+**1. Install MPP library and GStreamer plugin:**
+```bash
+# For Rockchip boards with hardware encoding support
+sudo apt-get install librockchip-mpp1 gstreamer1.0-rockchip
+```
+
+**2. Use the V4L2 encoder:**
+```bash
+selkies-gstreamer --encoder=v4l2h264enc  # H.264
+selkies-gstreamer --encoder=v4l2vp8enc   # VP8 (RK3399+)
+selkies-gstreamer --encoder=v4l2vp9enc   # VP9 (RK3588)
+```
+
+#### Generic ARM Boards
+
+For ARM boards without hardware encoding support, use the software encoder:
+```bash
+selkies-gstreamer --encoder=x264enc
+```
+
+**Note:** Performance will be limited with software encoding. Consider lowering resolution and framerate for acceptable performance.
+
 ### Install the latest build on self-hosted standalone machines, cloud instances, or virtual machines
 
 **Build artifacts for every `main` branch commit are available as an after logging into GitHub in [Actions](https://github.com/selkies-project/selkies/actions), and you do not need Docker® to download them.**
