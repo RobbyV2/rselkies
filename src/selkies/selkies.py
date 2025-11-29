@@ -1624,6 +1624,9 @@ class DataStreamingServer:
         # Audio buffer management
         audio_buffer = []
         buffer_max_size = 24000 * 2 * 2  # 2 seconds at 24kHz, 16-bit mono
+        buffer_min_size = 480  # 20ms worth of samples for smooth playback
+        last_audio_level = 0
+        audio_level_check_counter = 0
 
         # Define virtual source details
         virtual_source_name = "SelkiesVirtualMic"
@@ -1697,9 +1700,14 @@ class DataStreamingServer:
                                 active_upload_target_path_conn = None
                     elif msg_type == 0x02:  # Mic data
                         if not settings.microphone_enabled[0]:
+                            if len(payload) > 0:
+                                # Send status to client once
+                                await websocket.send("MIC_STATUS:disabled_by_server")
+                                data_logger.debug("Microphone disabled by server settings")
                             continue
                         if not PULSEAUDIO_AVAILABLE:
                             if len(payload) > 0:
+                                await websocket.send("MIC_STATUS:pulseaudio_unavailable")
                                 data_logger.warning(
                                     "PulseAudio library not available. Skipping microphone data."
                                 )
@@ -1877,7 +1885,7 @@ class DataStreamingServer:
                         try:
                             if pa_stream is None:
                                 data_logger.info(
-                                    f"Opening new pasimple playback stream to 'input' at 24000 Hz (s16le, mono)."
+                                    f"Opening new pasimple playback stream to '{null_sink_name}' at 24000 Hz (s16le, mono)."
                                 )
                                 pa_stream = pasimple.PaSimple(
                                     pasimple.PA_STREAM_PLAYBACK,
@@ -1886,17 +1894,36 @@ class DataStreamingServer:
                                     24000,
                                     "SelkiesClientMic",
                                     "MicStream",
-                                    device_name="input",
+                                    device_name=null_sink_name,
                                 )
                             
                             audio_buffer.extend(payload)
-                            
+
+                            # Monitor audio level periodically
+                            audio_level_check_counter += 1
+                            if audio_level_check_counter >= 100:  # Check every 100 packets
+                                audio_level_check_counter = 0
+                                if len(payload) >= 2:
+                                    # Calculate RMS of audio samples for level monitoring
+                                    samples = [int.from_bytes(payload[i:i+2], 'little', signed=True)
+                                             for i in range(0, len(payload)-1, 2)]
+                                    if samples:
+                                        rms = (sum(s**2 for s in samples) / len(samples)) ** 0.5
+                                        audio_level_db = 20 * (rms / 32768) if rms > 0 else -100
+                                        if abs(audio_level_db - last_audio_level) > 10:
+                                            data_logger.debug(f"Mic audio level: {audio_level_db:.1f} dB")
+                                            last_audio_level = audio_level_db
+
+                            # Handle buffer overflow
                             if len(audio_buffer) > buffer_max_size:
-                                audio_buffer = audio_buffer[len(audio_buffer)//2:]
-                                data_logger.warning("Audio buffer overflow, dropping old audio to prevent drift")
-                            
-                            if pa_stream and len(audio_buffer) >= len(payload):
-                                chunk_size = len(payload)
+                                dropped = len(audio_buffer) - buffer_max_size // 2
+                                audio_buffer = audio_buffer[dropped:]
+                                data_logger.warning(f"Audio buffer overflow, dropped {dropped} bytes to prevent drift")
+
+                            # Write to stream when we have enough data for smooth playback
+                            if pa_stream and len(audio_buffer) >= buffer_min_size:
+                                # Write available data up to a reasonable chunk size
+                                chunk_size = min(len(audio_buffer), 4800)  # 200ms max chunk
                                 data_to_write = bytes(audio_buffer[:chunk_size])
                                 audio_buffer[:chunk_size] = []
                                 pa_stream.write(data_to_write)
@@ -1911,7 +1938,15 @@ class DataStreamingServer:
                                     pa_stream.close()
                                 except:
                                     pass
+                                pa_stream = None
+
+                            # Clear buffer to prevent memory buildup
                             audio_buffer.clear()
+
+                            # Reset mic setup to retry on next packet
+                            if "Connection refused" in str(e_pa_write) or "Broken pipe" in str(e_pa_write):
+                                mic_setup_done = False
+                                data_logger.info("Will retry mic setup on next audio packet")
 
                 elif isinstance(message, str):
                     if message.startswith("SETTINGS,"):

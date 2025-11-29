@@ -19,11 +19,14 @@ class MicrophoneManager {
         this.isEnabled = false;
         this.isTransmitting = false;
         
-        // Audio processing settings
-        this.sampleRate = 48000;
+        // Audio processing settings - Match server expectations
+        this.sampleRate = 24000; // Server expects 24kHz
         this.channels = 1; // Mono for microphone
-        this.bufferSize = 4096;
+        this.bufferSize = 2048; // Smaller buffer for lower latency
         this.silenceThreshold = 0.01; // Threshold for silence detection
+
+        // WebSocket connection for audio data
+        this.dataWebSocket = null;
         
         // Opus encoding simulation (would need real opus encoder)
         this.audioBuffer = [];
@@ -44,7 +47,8 @@ class MicrophoneManager {
             const constraints = {
                 audio: {
                     channelCount: this.channels,
-                    sampleRate: this.sampleRate,
+                    sampleRate: { ideal: this.sampleRate },
+                    sampleSize: 16,
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true
@@ -72,14 +76,16 @@ class MicrophoneManager {
                 throw new Error("No media stream available. Call requestPermissions() first.");
             }
 
-            // Create audio context
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: this.sampleRate
-            });
+            // Create audio context - let it use native sample rate
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.nativeSampleRate = this.audioContext.sampleRate;
+
+            // Calculate resampling ratio
+            this.resampleRatio = this.sampleRate / this.nativeSampleRate;
 
             // Create source node from microphone stream
             this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
-            
+
             // Create processor node for audio processing
             this.processorNode = this.audioContext.createScriptProcessor(this.bufferSize, this.channels, this.channels);
             this.processorNode.onaudioprocess = this._processAudioData.bind(this);
@@ -99,66 +105,80 @@ class MicrophoneManager {
     }
 
     /**
-     * Set up WebRTC peer connection for microphone transmission
+     * Set up message listener for WebSocket status messages
      */
-    async setupWebRTCConnection() {
-        try {
-            // Create separate peer connection for microphone (following existing dual-connection pattern)
-            this.peerConnection = new RTCPeerConnection(this.webrtcDemo.rtcPeerConfig);
-            
-            // Add microphone track to peer connection
-            if (this.mediaStream) {
-                const audioTrack = this.mediaStream.getAudioTracks()[0];
-                this.peerConnection.addTrack(audioTrack, this.mediaStream);
-                this._setDebug("Added microphone track to peer connection");
-            }
-
-            // Create data channel for microphone control
-            this.dataChannel = this.peerConnection.createDataChannel("microphone", {
-                ordered: true
-            });
-            
-            this.dataChannel.onopen = () => {
-                this._setStatus("Microphone data channel opened");
-            };
-            
-            this.dataChannel.onmessage = (event) => {
-                this._handleDataChannelMessage(event);
-            };
-
-            // Set up ICE candidate handling
-            this.peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    // Send ICE candidate to signaling server (extend existing signaling)
-                    this._setDebug("Generated microphone ICE candidate");
+    setupWebSocketListener() {
+        // Listen for microphone status messages from server
+        if (typeof webrtc !== 'undefined' && webrtc.dataWS) {
+            const originalOnMessage = webrtc.dataWS.onmessage;
+            webrtc.dataWS.onmessage = (event) => {
+                if (typeof event.data === 'string' && event.data.startsWith('MIC_STATUS:')) {
+                    const status = event.data.substring(11);
+                    switch(status) {
+                        case 'disabled_by_server':
+                            this._setError("Microphone is disabled by server settings");
+                            this.disable();
+                            break;
+                        case 'pulseaudio_unavailable':
+                            this._setError("PulseAudio not available on server");
+                            this.disable();
+                            break;
+                        case 'ready':
+                            this._setStatus("Server microphone support ready");
+                            break;
+                        default:
+                            this._setDebug(`Server microphone status: ${status}`);
+                    }
+                }
+                // Call original handler
+                if (originalOnMessage) {
+                    originalOnMessage(event);
                 }
             };
-
-            this._setStatus("WebRTC connection for microphone initialized");
-            return true;
-        } catch (error) {
-            this._setError(`Failed to setup WebRTC connection: ${error.message}`);
-            return false;
         }
     }
 
     /**
      * Process audio data from microphone
-     * Implements silence detection and 16-bit integer encoding as suggested
+     * Implements silence detection, resampling, and 16-bit integer encoding
      */
     _processAudioData(audioProcessingEvent) {
         const inputBuffer = audioProcessingEvent.inputBuffer;
         const inputData = inputBuffer.getChannelData(0); // Get mono channel
-        
+
+        // Resample if needed (from native rate to 24kHz)
+        let resampledData;
+        if (Math.abs(this.resampleRatio - 1) > 0.01) {
+            // Simple linear interpolation resampling
+            const outputLength = Math.floor(inputData.length * this.resampleRatio);
+            resampledData = new Float32Array(outputLength);
+
+            for (let i = 0; i < outputLength; i++) {
+                const srcIndex = i / this.resampleRatio;
+                const srcIndexInt = Math.floor(srcIndex);
+                const srcIndexFrac = srcIndex - srcIndexInt;
+
+                if (srcIndexInt < inputData.length - 1) {
+                    // Linear interpolation between samples
+                    resampledData[i] = inputData[srcIndexInt] * (1 - srcIndexFrac) +
+                                      inputData[srcIndexInt + 1] * srcIndexFrac;
+                } else {
+                    resampledData[i] = inputData[Math.min(srcIndexInt, inputData.length - 1)];
+                }
+            }
+        } else {
+            resampledData = inputData;
+        }
+
         // Convert float32 to signed 16-bit integers
-        const int16Array = new Int16Array(inputData.length);
+        const int16Array = new Int16Array(resampledData.length);
         let hasAudio = false;
-        
-        for (let i = 0; i < inputData.length; i++) {
+
+        for (let i = 0; i < resampledData.length; i++) {
             // Convert float32 (-1.0 to 1.0) to int16 (-32768 to 32767)
-            const sample = Math.max(-1, Math.min(1, inputData[i]));
+            const sample = Math.max(-1, Math.min(1, resampledData[i]));
             int16Array[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-            
+
             // Check for silence (all zeros or below threshold)
             if (Math.abs(sample) > this.silenceThreshold) {
                 hasAudio = true;
@@ -183,43 +203,50 @@ class MicrophoneManager {
     }
 
     /**
-     * Transmit audio packet via WebRTC data channel
-     * In real implementation, this would encode to Opus first
+     * Transmit audio packet via WebSocket as binary data
+     * Sends raw PCM data that server expects
      */
     _transmitAudioPacket() {
-        if (!this.isTransmitting || !this.dataChannel || this.dataChannel.readyState !== 'open') {
+        if (!this.isTransmitting) {
             return;
+        }
+
+        // Check if WebSocket is available and open
+        if (!this.dataWebSocket || this.dataWebSocket.readyState !== WebSocket.OPEN) {
+            // Try to get the WebSocket from the global webrtc object
+            if (typeof webrtc !== 'undefined' && webrtc.dataWS) {
+                this.dataWebSocket = webrtc.dataWS;
+            } else {
+                return;
+            }
         }
 
         try {
             // Combine buffered audio data
             const totalSamples = this.audioBuffer.reduce((sum, buffer) => sum + buffer.length, 0);
             const combinedBuffer = new Int16Array(totalSamples);
-            
+
             let offset = 0;
             for (const buffer of this.audioBuffer) {
                 combinedBuffer.set(buffer, offset);
                 offset += buffer.length;
             }
 
-            // In real implementation, encode to Opus here
-            // For now, send raw PCM data with metadata
-            const audioPacket = {
-                type: 'microphone_audio',
-                data: {
-                    pcm_data: Array.from(combinedBuffer), // Convert to regular array for JSON
-                    sample_rate: this.sampleRate,
-                    channels: this.channels,
-                    timestamp: Date.now()
-                }
-            };
+            // Create binary message with type 0x02 for microphone data
+            const messageType = 0x02;
+            const pcmData = new Uint8Array(combinedBuffer.buffer);
+            const message = new Uint8Array(1 + pcmData.length);
 
-            this.dataChannel.send(JSON.stringify(audioPacket));
+            message[0] = messageType;
+            message.set(pcmData, 1);
+
+            // Send as binary data through WebSocket
+            this.dataWebSocket.send(message);
             this._setDebug(`Transmitted microphone packet: ${combinedBuffer.length} samples`);
-            
+
             // Clear buffer
             this.audioBuffer = [];
-            
+
         } catch (error) {
             this._setError(`Failed to transmit audio packet: ${error.message}`);
         }
@@ -337,6 +364,7 @@ class MicrophoneManager {
      */
     async enable() {
         this.isEnabled = true;
+        this.setupWebSocketListener();
         return await this.startTransmission();
     }
 
