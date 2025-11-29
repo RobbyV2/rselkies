@@ -2,8 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-ARG PY_BUILD_IMAGE=ghcr.io/selkies-project/selkies/py-build:main
-ARG WEB_IMAGE=ghcr.io/selkies-project/selkies/gst-web:main
+ARG PY_BUILD_IMAGE=ghcr.io/robbyv2/rselkies/py-build:main
+ARG WEB_IMAGE=ghcr.io/robbyv2/rselkies/gst-web:main
 FROM ${PY_BUILD_IMAGE} AS selkies-build
 FROM ${WEB_IMAGE} AS selkies-web
 FROM quay.io/condaforge/miniforge3:latest
