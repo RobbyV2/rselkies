@@ -260,9 +260,9 @@ start_x=1
 dtoverlay=vc4-kms-v3d-pi5
 ```
 
-**2. Install V4L2 GStreamer plugins:**
+**2. Install GStreamer plugins:**
 ```bash
-sudo apt-get install gstreamer1.0-v4l2 gstreamer1.0-plugins-good
+sudo apt-get install gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
 ```
 
 **3. Use the V4L2 encoder:**

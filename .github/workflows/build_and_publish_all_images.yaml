@@ -23,15 +23,21 @@ jobs:
         include:
         - name: gst-web
           context: addons/gst-web
+          platforms: linux/amd64,linux/arm64
 
         - name: py-build
           build_args: |
             PACKAGE_VERSION=0.0.0.dev0
           context: .
+          platforms: linux/amd64,linux/arm64
 
     name: ${{ matrix.name }}${{ matrix.version_suffix }} image build & publish
     steps:
     - uses: actions/checkout@v4
+
+    - name: Convert repository name to lowercase
+      id: repo
+      run: echo "repository=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
     - name: Build & publish ${{ matrix.name }} image
       uses: ./.github/actions/build_and_publish_image
@@ -42,7 +48,7 @@ jobs:
         platforms: ${{ matrix.platforms }}
         push: ${{ github.event_name != 'pull_request' }}
         subproject: ${{ matrix.name }}
-        tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}${{ matrix.version_suffix }}
+        tags: ghcr.io/${{ steps.repo.outputs.repository }}/${{ matrix.name }}:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}${{ matrix.version_suffix }}
 
   # Note: When modifying this job, copy modifications to all other workflow image jobs
   component_images:
@@ -59,6 +65,7 @@ jobs:
             PACKAGE_VERSION=0.0.0.dev0
             PKG_VERSION=0.0.0
           context: addons/conda
+          platforms: linux/amd64,linux/arm64
 
         - name: coturn
           context: addons/coturn
@@ -74,6 +81,7 @@ jobs:
             DISTRIB_IMAGE=ubuntu
             DISTRIB_RELEASE=20.04
           context: addons/gstreamer
+          platforms: linux/amd64,linux/arm64
 
         - name: gstreamer
           version_suffix: -ubuntu22.04
@@ -81,6 +89,7 @@ jobs:
             DISTRIB_IMAGE=ubuntu
             DISTRIB_RELEASE=22.04
           context: addons/gstreamer
+          platforms: linux/amd64,linux/arm64
 
         - name: gstreamer
           version_suffix: -ubuntu24.04
@@ -88,6 +97,7 @@ jobs:
             DISTRIB_IMAGE=ubuntu
             DISTRIB_RELEASE=24.04
           context: addons/gstreamer
+          platforms: linux/amd64,linux/arm64
 
         - name: js-interposer
           version_suffix: -ubuntu20.04
@@ -134,16 +144,29 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Convert repository name to lowercase
+      id: repo
+      run: echo "repository=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')\" >> $GITHUB_OUTPUT
+
+    - name: Prepare build args
+      id: build_args
+      run: |
+        BUILD_ARGS="${{ matrix.build_args }}"
+        BUILD_ARGS="${BUILD_ARGS//REPO_PLACEHOLDER/${{ steps.repo.outputs.repository }}}"
+        echo "args<<EOF" >> $GITHUB_OUTPUT
+        echo "$BUILD_ARGS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
     - name: Build & publish ${{ matrix.name }} image
       uses: ./.github/actions/build_and_publish_image
       with:
-        build_args: ${{ matrix.build_args }}
+        build_args: ${{ steps.build_args.outputs.args || matrix.build_args }}
         context: ${{ matrix.context }}
         dockerfile: ${{ matrix.dockerfile }}
         platforms: ${{ matrix.platforms }}
         push: ${{ github.event_name != 'pull_request' }}
         subproject: ${{ matrix.name }}
-        tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}${{ matrix.version_suffix }}
+        tags: ghcr.io/${{ steps.repo.outputs.repository }}/${{ matrix.name }}:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}${{ matrix.version_suffix }}
 
   # Note: When modifying this job, copy modifications to all other workflow image jobs
   example_images:
@@ -162,10 +185,10 @@ jobs:
             DISTRIB_IMAGE=ubuntu
             DISTRIB_RELEASE=20.04
             GSTREAMER_BASE_IMAGE_RELEASE=${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            PY_BUILD_IMAGE=ghcr.io/${{ github.repository }}/py-build:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            WEB_IMAGE=ghcr.io/${{ github.repository }}/gst-web:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
+            PY_BUILD_IMAGE=ghcr.io/REPO_PLACEHOLDER/py-build:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
+            WEB_IMAGE=ghcr.io/REPO_PLACEHOLDER/gst-web:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
             JS_BASE_IMAGE_RELEASE=${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            JS_BASE_IMAGE=ghcr.io/${{ github.repository }}/js-interposer
+            JS_BASE_IMAGE=ghcr.io/REPO_PLACEHOLDER/js-interposer
           context: addons/example
 
         - name: gst-py-example
@@ -175,10 +198,10 @@ jobs:
             DISTRIB_IMAGE=ubuntu
             DISTRIB_RELEASE=22.04
             GSTREAMER_BASE_IMAGE_RELEASE=${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            PY_BUILD_IMAGE=ghcr.io/${{ github.repository }}/py-build:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            WEB_IMAGE=ghcr.io/${{ github.repository }}/gst-web:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
+            PY_BUILD_IMAGE=ghcr.io/REPO_PLACEHOLDER/py-build:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
+            WEB_IMAGE=ghcr.io/REPO_PLACEHOLDER/gst-web:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
             JS_BASE_IMAGE_RELEASE=${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            JS_BASE_IMAGE=ghcr.io/${{ github.repository }}/js-interposer
+            JS_BASE_IMAGE=ghcr.io/REPO_PLACEHOLDER/js-interposer
           context: addons/example
 
         - name: gst-py-example
@@ -188,15 +211,19 @@ jobs:
             DISTRIB_IMAGE=ubuntu
             DISTRIB_RELEASE=24.04
             GSTREAMER_BASE_IMAGE_RELEASE=${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            PY_BUILD_IMAGE=ghcr.io/${{ github.repository }}/py-build:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            WEB_IMAGE=ghcr.io/${{ github.repository }}/gst-web:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
+            PY_BUILD_IMAGE=ghcr.io/REPO_PLACEHOLDER/py-build:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
+            WEB_IMAGE=ghcr.io/REPO_PLACEHOLDER/gst-web:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
             JS_BASE_IMAGE_RELEASE=${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}
-            JS_BASE_IMAGE=ghcr.io/${{ github.repository }}/js-interposer
+            JS_BASE_IMAGE=ghcr.io/REPO_PLACEHOLDER/js-interposer
           context: addons/example
 
     name: ${{ matrix.name }}${{ matrix.version_suffix }} image build & publish
     steps:
     - uses: actions/checkout@v4
+
+    - name: Convert repository name to lowercase
+      id: repo
+      run: echo "repository=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
     - name: Build & publish ${{ matrix.name }} image
       uses: ./.github/actions/build_and_publish_image
@@ -207,7 +234,7 @@ jobs:
         platforms: ${{ matrix.platforms }}
         push: ${{ github.event_name != 'pull_request' }}
         subproject: ${{ matrix.name }}
-        tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}${{ matrix.version_suffix }}
+        tags: ghcr.io/${{ steps.repo.outputs.repository }}/${{ matrix.name }}:${{ github.event_name != 'pull_request' && github.ref_name || 'main' }}${{ matrix.version_suffix }}
 
   # Note: When modifying this job, copy modifications to all other workflow image jobs
   upload_artifacts:
